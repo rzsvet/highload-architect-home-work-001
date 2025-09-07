@@ -1,0 +1,472 @@
+openapi: 3.0.0
+info:
+  title: User API Service
+  description: API для регистрации, авторизации и управления пользователями
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: /api
+    description: Development server
+
+tags:
+  - name: Auth
+    description: Операции аутентификации
+  - name: Users
+    description: Операции с пользователями
+
+paths:
+  /user/register:
+    post:
+      tags:
+        - Auth
+      summary: Регистрация нового пользователя
+      description: Создает нового пользователя в системе
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              username: "john_doe"
+              email: "john@example.com"
+              password: "password123"
+              first_name: "John"
+              last_name: "Doe"
+              birth_date: "1990-01-15"
+              gender: "male"
+              interests: "programming, reading, sports"
+              city: "New York"
+      responses:
+        '201':
+          description: Пользователь успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Неверные данные или пользователь уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /login:
+    post:
+      tags:
+        - Auth
+      summary: Авторизация пользователя
+      description: Вход пользователя в систему и получение JWT токена
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: "john@example.com"
+              password: "password123"
+      responses:
+        '200':
+          description: Успешная авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Неверные учетные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Неверный формат запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users:
+    get:
+      tags:
+        - Users
+      summary: Получение списка всех пользователей
+      description: Возвращает список всех зарегистрированных пользователей (требует авторизации)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Список пользователей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /user/get/{id}:
+    get:
+      tags:
+        - Users
+      summary: Получение пользователя по ID
+      description: Возвращает информацию о конкретном пользователе по его ID (требует авторизации)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID пользователя
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      responses:
+        '200':
+          description: Информация о пользователе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Неверный формат ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /profile:
+    get:
+      tags:
+        - Users
+      summary: Получение профиля текущего пользователя
+      description: Возвращает информацию о текущем аутентифицированном пользователе
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  #   put:
+  #     tags:
+  #       - Users
+  #     summary: Обновление профиля текущего пользователя
+  #     description: Обновляет информацию о текущем аутентифицированном пользователе
+  #     security:
+  #       - BearerAuth: []
+  #     requestBody:
+  #       required: true
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: '#/components/schemas/UpdateUserRequest'
+  #           example:
+  #             first_name: "John"
+  #             last_name: "Smith"
+  #             interests: "programming, music, travel"
+  #             city: "Boston"
+  #     responses:
+  #       '200':
+  #         description: Профиль успешно обновлен
+  #         content:
+  #           application/json:
+  #             schema:
+  #               type: object
+  #               properties:
+  #                 message:
+  #                   type: string
+  #                   example: "Profile updated successfully"
+  #       '401':
+  #         description: Не авторизован
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: '#/components/schemas/Error'
+  #       '400':
+  #         description: Неверные данные
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: '#/components/schemas/Error'
+  #       '404':
+  #         description: Пользователь не найден
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+        - first_name
+        - last_name
+        - birth_date
+        - gender
+      properties:
+        username:
+          type: string
+          description: Имя пользователя
+          minLength: 3
+          maxLength: 100
+          example: "john_doe"
+        email:
+          type: string
+          format: email
+          description: Email пользователя
+          maxLength: 255
+          example: "john@example.com"
+        password:
+          type: string
+          format: password
+          description: Пароль пользователя
+          minLength: 6
+          example: "password123"
+        first_name:
+          type: string
+          description: Имя пользователя
+          maxLength: 100
+          example: "John"
+        last_name:
+          type: string
+          description: Фамилия пользователя
+          maxLength: 100
+          example: "Doe"
+        birth_date:
+          type: string
+          format: date
+          description: Дата рождения в формате YYYY-MM-DD
+          example: "1990-01-15"
+        gender:
+          type: string
+          description: Пол пользователя
+          enum:
+            - male
+            - female
+            - unknown
+          example: "male"
+        interests:
+          type: string
+          description: Интересы пользователя (через запятую)
+          example: "programming, reading, sports"
+        city:
+          type: string
+          description: Город пользователя
+          maxLength: 100
+          example: "New York"
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email пользователя
+          example: "john@example.com"
+        password:
+          type: string
+          format: password
+          description: Пароль пользователя
+          example: "password123"
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID пользователя
+          example: 1
+        username:
+          type: string
+          description: Имя пользователя
+          example: "john_doe"
+        email:
+          type: string
+          format: email
+          description: Email пользователя
+          example: "john@example.com"
+        first_name:
+          type: string
+          description: Имя пользователя
+          example: "John"
+        last_name:
+          type: string
+          description: Фамилия пользователя
+          example: "Doe"
+        birth_date:
+          type: string
+          format: date
+          description: Дата рождения
+          example: "1990-01-15"
+        gender:
+          type: string
+          description: Пол пользователя
+          enum:
+            - male
+            - female
+            - unknown
+          example: "male"
+        interests:
+          type: string
+          description: Интересы пользователя
+          example: "programming, reading, sports"
+        city:
+          type: string
+          description: Город пользователя
+          example: "New York"
+        created_at:
+          type: string
+          format: date-time
+          description: Дата и время создания пользователя
+          example: "2023-12-19T10:30:00Z"
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT токен для аутентификации
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          description: Имя пользователя
+          maxLength: 100
+          example: "John"
+          nullable: true
+        last_name:
+          type: string
+          description: Фамилия пользователя
+          maxLength: 100
+          example: "Smith"
+          nullable: true
+        birth_date:
+          type: string
+          format: date
+          description: Дата рождения в формате YYYY-MM-DD
+          example: "1990-01-15"
+          nullable: true
+        gender:
+          type: string
+          description: Пол пользователя
+          enum:
+            - male
+            - female
+            - unknown
+          example: "male"
+          nullable: true
+        interests:
+          type: string
+          description: Интересы пользователя (через запятую)
+          example: "programming, music, travel"
+          nullable: true
+        city:
+          type: string
+          description: Город пользователя
+          maxLength: 100
+          example: "Boston"
+          nullable: true
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Сообщение об ошибке
+          example: "Invalid credentials"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Введите JWT токен в формате "Bearer {token}"
+
+  responses:
+    UnauthorizedError:
+      description: Не авторизован
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Authorization header required"
+
+    NotFoundError:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "User not found"
+
+    ValidationError:
+      description: Ошибка валидации
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Invalid email format"
