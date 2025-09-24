@@ -5,6 +5,8 @@ import (
 	"api/internal/monitoring"
 	"api/pkg/utils"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -193,6 +195,140 @@ func (r *UserRepository) UserExists(username string, email string) (bool, error)
 		monitoring.ObserveDatabaseQuery("user_exists", err == nil, duration)
 	}()
 	return exists, err
+}
+
+func (r *UserRepository) SearchUsers(firstName, lastName string) ([]models.UserResponse, error) {
+	query := `
+        SELECT 
+            id, username, email, first_name, last_name, 
+            birth_date, gender, interests, city, created_at
+        FROM users 
+        WHERE first_name ILIKE $1 AND last_name ILIKE $2
+        ORDER BY id
+        LIMIT 100
+    `
+
+	// query := `
+	//     SELECT
+	//         id, username, email, first_name, last_name,
+	//         birth_date, gender, interests, city, created_at
+	//     FROM users
+	//     WHERE first_name ILIKE $1 AND last_name ILIKE $2
+	//     ORDER BY first_name, last_name
+	//     LIMIT 100
+	// `
+
+	// Добавляем wildcards для частичного совпадения
+	firstNamePattern := "%" + strings.ToLower(firstName) + "%"
+	lastNamePattern := "%" + strings.ToLower(lastName) + "%"
+
+	rows, err := r.readDB.Query(query, firstNamePattern, lastNamePattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []models.UserResponse
+	for rows.Next() {
+		var user models.UserResponse
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.Email,
+			&user.FirstName,
+			&user.LastName,
+			&user.BirthDate,
+			&user.Gender,
+			&user.Interests,
+			&user.City,
+			&user.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// SearchUsersWithPaging поиск с пагинацией
+func (r *UserRepository) SearchUsersWithPaging(firstName string, lastName string, limit int, offset int) ([]models.UserResponse, int, error) {
+	// Запрос для получения пользователей
+	usersQuery := `
+        SELECT 
+            id, username, email, first_name, last_name, 
+            birth_date, gender, interests, city, created_at
+        FROM users 
+        WHERE first_name ILIKE $1 AND last_name ILIKE $2
+        ORDER BY id
+        LIMIT $3 OFFSET $4
+    `
+
+	// usersQuery := `
+	//     SELECT
+	//         id, username, email, first_name, last_name,
+	//         birth_date, gender, interests, city, created_at
+	//     FROM users
+	//     WHERE first_name ILIKE $1 AND last_name ILIKE $2
+	//     ORDER BY first_name, last_name
+	//     LIMIT $3 OFFSET $4
+	// `
+
+	// Запрос для подсчета общего количества
+	countQuery := `
+        SELECT COUNT(*) 
+        FROM users 
+        WHERE first_name ILIKE $1 AND last_name ILIKE $2
+    `
+
+	firstNamePattern := "%" + strings.ToLower(firstName) + "%"
+	lastNamePattern := "%" + strings.ToLower(lastName) + "%"
+
+	// Выполняем запрос на подсчет
+	var total int
+	err := r.readDB.QueryRow(countQuery, firstNamePattern, lastNamePattern).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count users: %w", err)
+	}
+
+	// Выполняем запрос на получение данных
+	rows, err := r.readDB.Query(usersQuery, firstNamePattern, lastNamePattern, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to search users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []models.UserResponse
+	for rows.Next() {
+		var user models.UserResponse
+		err := rows.Scan(
+			&user.ID,
+			&user.Username,
+			&user.Email,
+			&user.FirstName,
+			&user.LastName,
+			&user.BirthDate,
+			&user.Gender,
+			&user.Interests,
+			&user.City,
+			&user.CreatedAt,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
 }
 
 // func (r *UserRepository) UpdateUser(id int, updateReq *models.UpdateUserRequest) error {

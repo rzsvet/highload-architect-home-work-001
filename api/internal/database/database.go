@@ -92,6 +92,15 @@ func InitTables(db *Database) error {
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
     CREATE INDEX IF NOT EXISTS idx_users_city ON users(city);
     CREATE INDEX IF NOT EXISTS idx_users_gender ON users(gender);
+
+	-- Включите расширение для триграммного поиска если еще не включено
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+ 	-- Индексы для оптимизации поиска
+    CREATE INDEX IF NOT EXISTS idx_users_first_name ON users USING gin (first_name gin_trgm_ops);
+    CREATE INDEX IF NOT EXISTS idx_users_last_name ON users USING gin (last_name gin_trgm_ops);
+	CREATE INDEX IF NOT EXISTS idx_users_first_last_gin ON users USING gin (first_name gin_trgm_ops, last_name gin_trgm_ops);
+	
     `
 
 	_, err := db.WriteDB.Exec(query)

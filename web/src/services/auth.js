@@ -24,5 +24,17 @@ export const authService = {
   getUserById: async (id) => {
     const response = await api.get(`/user/get/${id}`);
     return response.data;
+  },
+
+  searchUsers: async (firstName, lastName, page = 1, pageSize = 20) => {
+    const response = await api.get('/user/search', {
+      params: {
+        first_name: firstName,
+        last_name: lastName,
+        page: page,
+        page_size: pageSize
+      }
+    });
+    return response.data;
   }
 };

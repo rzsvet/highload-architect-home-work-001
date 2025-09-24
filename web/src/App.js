@@ -8,6 +8,7 @@ import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
 import UserProfile from './components/Users/UserProfile';
 import UserList from './components/Users/UserList';
+import UserSearch from './components/Users/UserSearch';
 import UserDetails from './components/Users/UserDetails';
 
 function App() {
@@ -27,6 +28,11 @@ function App() {
             <Route path="/users" element={
               <ProtectedRoute>
                 <UserList />
+              </ProtectedRoute>
+            } />
+            <Route path="/search" element={
+              <ProtectedRoute>
+                <UserSearch />
               </ProtectedRoute>
             } />
             <Route path="/user/:id" element={

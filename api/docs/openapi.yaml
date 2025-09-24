@@ -29,7 +29,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterRequest'
+              $ref: "#/components/schemas/RegisterRequest"
             example:
               username: "john_doe"
               email: "john@example.com"
@@ -41,24 +41,24 @@ paths:
               interests: "programming, reading, sports"
               city: "New York"
       responses:
-        '201':
+        "201":
           description: Пользователь успешно создан
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
-        '400':
+                $ref: "#/components/schemas/UserResponse"
+        "400":
           description: Неверные данные или пользователь уже существует
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Внутренняя ошибка сервера
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /login:
     post:
@@ -71,29 +71,29 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginRequest'
+              $ref: "#/components/schemas/LoginRequest"
             example:
               email: "john@example.com"
               password: "password123"
       responses:
-        '200':
+        "200":
           description: Успешная авторизация
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '401':
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
           description: Неверные учетные данные
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '400':
+                $ref: "#/components/schemas/Error"
+        "400":
           description: Неверный формат запроса
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /users:
     get:
@@ -104,26 +104,26 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Список пользователей
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/UserResponse'
-        '401':
+                  $ref: "#/components/schemas/UserResponse"
+        "401":
           description: Не авторизован
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Внутренняя ошибка сервера
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /user/get/{id}:
     get:
@@ -143,30 +143,98 @@ paths:
             format: int64
             example: 1
       responses:
-        '200':
+        "200":
           description: Информация о пользователе
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
-        '401':
+                $ref: "#/components/schemas/UserResponse"
+        "401":
           description: Не авторизован
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
+                $ref: "#/components/schemas/Error"
+        "404":
           description: Пользователь не найден
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '400':
+                $ref: "#/components/schemas/Error"
+        "400":
           description: Неверный формат ID
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
+
+  /user/search:
+    get:
+      tags:
+        - Search
+      summary: Поиск анкет пользователей
+      description: Поиск пользователей по имени и фамилии с пагинацией
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: first_name
+          in: query
+          required: true
+          description: Часть имени для поиска
+          schema:
+            type: string
+            example: "Конст"
+            minLength: 2
+        - name: last_name
+          in: query
+          required: true
+          description: Часть фамилии для поиска
+          schema:
+            type: string
+            example: "Оси"
+            minLength: 2
+        - name: page
+          in: query
+          required: false
+          description: Номер страницы
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Размер страницы
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Успешный поиск пользователей
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSearchResponse"
+        "400":
+          description: Невалидные данные
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /profile:
     get:
@@ -177,24 +245,25 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Профиль пользователя
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
-        '401':
+                $ref: "#/components/schemas/UserResponse"
+        "401":
           description: Не авторизован
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
+                $ref: "#/components/schemas/Error"
+        "404":
           description: Пользователь не найден
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
+
   #   put:
   #     tags:
   #       - Users
@@ -384,7 +453,7 @@ components:
           description: JWT токен для аутентификации
           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
         user:
-          $ref: '#/components/schemas/UserResponse'
+          $ref: "#/components/schemas/UserResponse"
 
     UpdateUserRequest:
       type: object
@@ -428,6 +497,18 @@ components:
           example: "Boston"
           nullable: true
 
+    UserSearchResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserResponse'
+        total:
+          type: integer
+          description: Общее количество найденных пользователей
+          example: 150
+
     Error:
       type: object
       properties:
@@ -449,7 +530,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             error: "Authorization header required"
 
@@ -458,7 +539,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             error: "User not found"
 
@@ -467,6 +548,6 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: "#/components/schemas/Error"
           example:
             error: "Invalid email format"

@@ -129,3 +129,46 @@ func (s *UserService) ValidateToken(tokenString string) (jwt.MapClaims, error) {
 
 	return nil, errors.New("invalid token")
 }
+
+// SearchUsers поиск пользователей
+func (s *UserService) SearchUsers(firstName, lastName string) ([]models.UserResponse, error) {
+	if firstName == "" || lastName == "" {
+		return nil, errors.New("first name and last name are required")
+	}
+
+	if len(firstName) < 2 || len(lastName) < 2 {
+		return nil, errors.New("search query must be at least 2 characters long")
+	}
+
+	return s.userRepo.SearchUsers(firstName, lastName)
+}
+
+// SearchUsersWithPaging поиск пользователей с пагинацией
+func (s *UserService) SearchUsersWithPaging(firstName, lastName string, page, pageSize int) (*models.UserSearchResponse, error) {
+	if firstName == "" || lastName == "" {
+		return nil, errors.New("first name and last name are required")
+	}
+
+	if len(firstName) < 2 || len(lastName) < 2 {
+		return nil, errors.New("search query must be at least 2 characters long")
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	offset := (page - 1) * pageSize
+
+	users, total, err := s.userRepo.SearchUsersWithPaging(firstName, lastName, pageSize, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.UserSearchResponse{
+		Users: users,
+		Total: total,
+	}, nil
+}

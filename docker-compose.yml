@@ -1,0 +1,299 @@
+services:
+  traefik:
+    image: traefik:v3.5.1
+    command:
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:8081
+      - --metrics.prometheus=true
+      - --metrics.prometheus.entrypoint=traefik
+      - --log.level=DEBUG
+    ports:
+      - "8081:8081"
+      - "8080:8080"
+    depends_on:
+      web:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      network-db:
+      network-api:
+      network-web:
+      network-monitoring:
+      network-public:
+    # labels:
+      # Авторизация: Dashboard защищен базовой аутентификацией:
+      # Логин: admin
+      # Пароль: password (по умолчанию)
+      # Генерация пароля:
+      # Bash:
+      # htpasswd -nb user password
+      # Docker
+      # docker run --rm httpd:2.4-alpine htpasswd -nb user password
+      # Нужно не забыть заменить $ на $$ прежде чем указывать в docker compose
+      # - "traefik.http.routers.traefik-api.middlewares=traefik-auth"
+      # - "traefik.http.middlewares.traefik-auth.basicauth.users=admin:$$apr1$$dd4OPiEE$$1NKZ9eSD9GJtj0DYHwkh9." # пароль: password
+
+  web:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.web.rule=PathPrefix(`/`)"
+      - "traefik.http.services.web.loadbalancer.server.port=8080"
+    build:
+      context: ./web/
+      dockerfile: ../.configs/web.Dockerfile
+    # ports:
+    #   - "${NG_PUBLIC_HTTP_PORT:-8079}:${NG_HTTP_PORT:-8080}"
+    environment:
+      NGINX_PORT: "${NG_HTTP_PORT:-8080}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - nginx-logs:/var/log/nginx
+      - .configs/web/config.json:/usr/share/nginx/html/config.json
+    depends_on:
+      api:
+        condition: service_healthy
+        restart: true
+    networks:
+      network-web:
+        ipv4_address: 172.21.0.34
+
+  nginx-exporter:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nginx-exporter.rule=PathPrefix(`/exporter/nginx`)"
+      - "traefik.http.services.nginx-exporter.loadbalancer.server.port=9113"
+      - "traefik.http.middlewares.nginx-exporter-stripprefix.stripprefix.prefixes=/exporter/nginx"
+      - "traefik.http.routers.nginx-exporter.middlewares=nginx-exporter-stripprefix"
+    image: nginx/nginx-prometheus-exporter:1.4.2
+    restart: unless-stopped
+    command: ["--nginx.scrape-uri", "http://172.21.0.34:8080/nginx_status"]
+    # ports:
+    #   - 9113:9113
+    depends_on:
+      web:
+        condition: service_healthy
+        restart: true
+    networks:
+      network-web:
+        ipv4_address: 172.21.0.35
+      network-monitoring:
+            
+  api:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.api-stripprefix.stripprefix.prefixes=/api"
+      - "traefik.http.routers.api.middlewares=api-stripprefix"
+    build:
+      context: ./api/
+      dockerfile: ../.configs/api.Dockerfile
+    environment:
+      GIN_MODE: "release"
+      SERVER_PORT: "${SERVER_PORT:-8080}"
+      SERVER_PATH: "${SERVER_PATH:-/}"
+      JWT_SECRET: "${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}"
+      WRITE_DB_HOST: "${WRITE_DB_HOST:-db}"
+      WRITE_DB_PORT: "${WRITE_DB_PORT:-5432}"
+      WRITE_DB_NAME: "${WRITE_DB_NAME:-root}"
+      WRITE_DB_USER: "${WRITE_DB_USER:-root}"
+      WRITE_DB_PASSWORD: "${WRITE_DB_PASSWORD:-password}"
+      READ_DB_HOST: "${READ_DB_HOST:-db}"
+      READ_DB_PORT: "${READ_DB_PORT:-5432}"
+      READ_DB_NAME: "${READ_DB_NAME:-root}"
+      READ_DB_USER: "${READ_DB_USER:-root}"
+      READ_DB_PASSWORD: "${READ_DB_PASSWORD:-password}"
+      SERVER_SWAGGER: "${SERVER_SWAGGER:-disabled}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:8079}"
+    # ports:
+    #   - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/api", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+    networks:
+      network-db:
+      network-api:
+      network-monitoring:
+
+  db:
+    # labels:
+    #   - "traefik.enable=true"
+    #   # TCP Router
+    #   - "traefik.tcp.routers.db.rule=HostSNI(`*`)"
+    #   - "traefik.tcp.routers.db.service=db-service"
+    #   # TCP Service
+    #   - "traefik.tcp.services.db-service.loadbalancer.server.port=5432"
+    image: postgres:15.5-alpine3.18
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-root}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-password}"
+      POSTGRES_DB: "${POSTGRES_DB:-root}"
+      PGPORT: "${POSTGRES_PORT:-5432}"
+    command: ["postgres", "-c", "max_connections=1000"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
+      interval: 40s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+    # ports:
+    #   - "${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      network-db:
+
+  postgres-exporter:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.postgres-exporter.rule=PathPrefix(`/exporter/postgres`)"
+      - "traefik.http.services.postgres-exporter.loadbalancer.server.port=9187"
+      - "traefik.http.middlewares.postgres-exporter-stripprefix.stripprefix.prefixes=/exporter/postgres"
+      - "traefik.http.routers.postgres-exporter.middlewares=postgres-exporter-stripprefix"
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable"
+    # ports:
+    #   - 9187:9187
+    depends_on:
+      - db
+    networks:
+      network-db:
+      network-monitoring:
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/podman/podman.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/containers:/var/lib/docker:ro
+    networks:
+      network-monitoring:
+
+  prometheus:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=PathPrefix(`/services/prometheus`)"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+      - "traefik.http.middlewares.prometheus-stripprefix.stripprefix.prefixes=/services/prometheus"
+      - "traefik.http.routers.prometheus.middlewares=prometheus-stripprefix"
+    image: prom/prometheus:v2.48.0
+    restart: unless-stopped
+    healthcheck:
+      test: "wget -q --spider http://localhost:9090/metrics || exit 1"
+      interval: 40s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+    command: 
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+      - --web.route-prefix=/
+      - --web.external-url=http://localhost:8081/services/prometheus
+    volumes:
+      - prometheus_data:/prometheus
+      - ".configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml"
+    # ports:
+    #   - 9090:9090
+    networks:
+      network-monitoring:
+
+  grafana:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=PathPrefix(`/services/grafana`)"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.grafana-stripprefix.stripprefix.prefixes=/services/grafana"
+      - "traefik.http.routers.grafana.middlewares=grafana-stripprefix"
+    image: grafana/grafana:10.2.2-ubuntu
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GF_SECURITY_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD:-password}"
+      GF_SERVER_HTTP_PORT: "${GF_SERVER_HTTP_PORT:-3000}"
+      GF_SERVER_ROOT_URL: "http://localhost:8081/services/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: false
+    depends_on:
+      - prometheus
+    # ports:
+    #   - "${GF_PUBLIC_HTTP_PORT:-3000}:${GF_SERVER_HTTP_PORT:-3000}"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - .configs/grafana/provisioning/:/etc/grafana/provisioning/
+    networks:
+      network-monitoring:
+    restart: always
+
+  swagger-ui:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.swagger-ui.rule=PathPrefix(`/services/openapi`)"
+      - "traefik.http.services.swagger-ui.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.swagger-ui-stripprefix.stripprefix.prefixes=/services/openapi"
+      - "traefik.http.routers.swagger-ui.middlewares=swagger-ui-stripprefix"
+    image: swaggerapi/swagger-ui:v5.28.0
+    # ports:
+    #   - "${SW_PUBLIC_HTTP_PORT:-8082}:${SW_HTTP_PORT:-8080}"
+    environment:
+      - SWAGGER_JSON=/data/openapi.yaml
+    volumes:
+      - .configs/swagger:/data
+    networks:
+      network-public:
+  
+volumes:
+  pg_data:
+  app_uploads:
+  prometheus_data:
+  grafana_data:
+  nginx-logs:
+
+networks:
+  network-db:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.0/28
+  network-api:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.16/28
+  network-web:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.32/28
+  network-monitoring:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.48/28
+  network-public:
+    ipam:
+      config:
+        - subnet: 172.21.0.64/28

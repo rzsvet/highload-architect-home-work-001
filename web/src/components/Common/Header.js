@@ -19,6 +19,7 @@ const Header = () => {
               <span style={{ marginRight: '1rem' }}>Welcome, {user.username}!</span>
               <a href="/profile" style={{ marginRight: '1rem' }}>Profile</a>
               <a href="/users" style={{ marginRight: '1rem' }}>Users</a>
+              <a href="/search" style={{ marginRight: '1rem' }}>Search</a>
               <button onClick={logout}>Logout</button>
             </div>
           ) : (

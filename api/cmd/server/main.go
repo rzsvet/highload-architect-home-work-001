@@ -74,6 +74,7 @@ func main() {
 	userRepo := repository.NewUserRepository(db.WriteDB, db.ReadDB)
 	userService := service.NewUserService(userRepo, cfg.JWTSecret)
 	userHandler := handler.NewUserHandler(userService)
+	searchHandler := handler.NewSearchHandler(userService)
 
 	// Create Gin router
 	router := gin.Default()
@@ -116,6 +117,8 @@ func main() {
 		protected.GET("/user/get/:id", userHandler.GetUser)
 		protected.GET("/profile", userHandler.GetProfile)
 		// protected.PUT("/profile", userHandler.UpdateProfile)
+		protected.GET("/user/search", searchHandler.SearchUsers)
+		protected.GET("/user/search/simple", searchHandler.SearchUsersSimple)
 	}
 
 	// Health check endpoint
