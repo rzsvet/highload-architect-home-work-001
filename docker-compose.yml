@@ -13,10 +13,6 @@ services:
     ports:
       - "8081:8081"
       - "8080:8080"
-    depends_on:
-      web:
-        condition: service_healthy
-        restart: true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -38,57 +34,6 @@ services:
       # - "traefik.http.routers.traefik-api.middlewares=traefik-auth"
       # - "traefik.http.middlewares.traefik-auth.basicauth.users=admin:$$apr1$$dd4OPiEE$$1NKZ9eSD9GJtj0DYHwkh9." # пароль: password
 
-  web:
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.web.rule=PathPrefix(`/`)"
-      - "traefik.http.services.web.loadbalancer.server.port=8080"
-    build:
-      context: ./web/
-      dockerfile: ../.configs/web.Dockerfile
-    # ports:
-    #   - "${NG_PUBLIC_HTTP_PORT:-8079}:${NG_HTTP_PORT:-8080}"
-    environment:
-      NGINX_PORT: "${NG_HTTP_PORT:-8080}"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "/healthcheck.sh"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    volumes:
-      - nginx-logs:/var/log/nginx
-      - .configs/web/config.json:/usr/share/nginx/html/config.json
-    depends_on:
-      api:
-        condition: service_healthy
-        restart: true
-    networks:
-      network-web:
-        ipv4_address: 172.21.0.34
-
-  nginx-exporter:
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.nginx-exporter.rule=PathPrefix(`/exporter/nginx`)"
-      - "traefik.http.services.nginx-exporter.loadbalancer.server.port=9113"
-      - "traefik.http.middlewares.nginx-exporter-stripprefix.stripprefix.prefixes=/exporter/nginx"
-      - "traefik.http.routers.nginx-exporter.middlewares=nginx-exporter-stripprefix"
-    image: nginx/nginx-prometheus-exporter:1.4.2
-    restart: unless-stopped
-    command: ["--nginx.scrape-uri", "http://172.21.0.34:8080/nginx_status"]
-    # ports:
-    #   - 9113:9113
-    depends_on:
-      web:
-        condition: service_healthy
-        restart: true
-    networks:
-      network-web:
-        ipv4_address: 172.21.0.35
-      network-monitoring:
-            
   api:
     labels:
       - "traefik.enable=true"
@@ -104,20 +49,22 @@ services:
       SERVER_PORT: "${SERVER_PORT:-8080}"
       SERVER_PATH: "${SERVER_PATH:-/}"
       JWT_SECRET: "${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}"
-      WRITE_DB_HOST: "${WRITE_DB_HOST:-db}"
+      # WRITE_DB_HOST: "${WRITE_DB_HOST:-db}"
+      WRITE_DB_HOST: "${WRITE_DB_HOST:-db-master}"
       WRITE_DB_PORT: "${WRITE_DB_PORT:-5432}"
       WRITE_DB_NAME: "${WRITE_DB_NAME:-root}"
       WRITE_DB_USER: "${WRITE_DB_USER:-root}"
       WRITE_DB_PASSWORD: "${WRITE_DB_PASSWORD:-password}"
-      READ_DB_HOST: "${READ_DB_HOST:-db}"
+      # READ_DB_HOST: "${READ_DB_HOST:-db}"
+      READ_DB_HOST: "${READ_DB_HOST:-db-slave-01}"
       READ_DB_PORT: "${READ_DB_PORT:-5432}"
       READ_DB_NAME: "${READ_DB_NAME:-root}"
       READ_DB_USER: "${READ_DB_USER:-root}"
       READ_DB_PASSWORD: "${READ_DB_PASSWORD:-password}"
       SERVER_SWAGGER: "${SERVER_SWAGGER:-disabled}"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:8079}"
-    # ports:
-    #   - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
+    ports:
+      - "${SERVER_PORT:-8079}:${SERVER_PORT:-8080}"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "/api", "healthcheck"]
@@ -126,7 +73,7 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      db:
+      db-master:
         condition: service_healthy
         restart: true
     networks:
@@ -134,7 +81,36 @@ services:
       network-api:
       network-monitoring:
 
-  db:
+  # db:
+  #   # labels:
+  #   #   - "traefik.enable=true"
+  #   #   # TCP Router
+  #   #   - "traefik.tcp.routers.db.rule=HostSNI(`*`)"
+  #   #   - "traefik.tcp.routers.db.service=db-service"
+  #   #   # TCP Service
+  #   #   - "traefik.tcp.services.db-service.loadbalancer.server.port=5432"
+  #   image: postgres:15.5-alpine3.18
+  #   environment:
+  #     POSTGRES_USER: "${POSTGRES_USER:-root}"
+  #     POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-password}"
+  #     POSTGRES_DB: "${POSTGRES_DB:-root}"
+  #     PGPORT: "${POSTGRES_PORT:-5432}"
+  #   command: ["postgres", "-c", "max_connections=1000"]
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
+  #     interval: 40s
+  #     timeout: 30s
+  #     retries: 3
+  #     start_period: 60s
+  #   ports:
+  #     - "${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}"
+  #   volumes:
+  #     - pg_data:/var/lib/postgresql/data
+  #   networks:
+  #     network-db:
+
+  db-master:
     # labels:
     #   - "traefik.enable=true"
     #   # TCP Router
@@ -142,13 +118,41 @@ services:
     #   - "traefik.tcp.routers.db.service=db-service"
     #   # TCP Service
     #   - "traefik.tcp.services.db-service.loadbalancer.server.port=5432"
-    image: postgres:15.5-alpine3.18
+    image: postgres:16.10-alpine3.22
     environment:
       POSTGRES_USER: "${POSTGRES_USER:-root}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-password}"
       POSTGRES_DB: "${POSTGRES_DB:-root}"
       PGPORT: "${POSTGRES_PORT:-5432}"
-    command: ["postgres", "-c", "max_connections=1000"]
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replica_user}"
+      POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
+      interval: 40s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+    ports:
+      - "${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}"
+    volumes:
+      - pg_data_master:/var/lib/postgresql/data/pgdata
+      - .configs/db/master/init.sh:/docker-entrypoint-initdb.d/init.sh
+    networks:
+      network-db:
+
+  db-slave-01:
+    image: postgres:16.10-alpine3.22
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replica_user}"
+      POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
+      PGPASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
+      PGPORT: "${POSTGRES_PORT:-5432}"
+    command: >
+      /bin/sh -c "until pg_basebackup -w -h db-master -D /var/lib/postgresql/data/pgdata -U replica_user -P -R; do sleep 1; done &&
+      /usr/local/bin/docker-entrypoint.sh postgres" 
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
@@ -157,11 +161,70 @@ services:
       retries: 3
       start_period: 60s
     # ports:
-    #   - "${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}"
+    #   - "${POSTGRES_REPLICA_01_PORT:-5433}:${POSTGRES_PORT:-5432}"
+    depends_on:
+      db-master:
+        condition: service_healthy
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_data_replica_01:/var/lib/postgresql/data/pgdata
+      - .configs/db/replicas/01-init.sh:/docker-entrypoint-initdb.d/init.sh
     networks:
       network-db:
+
+  db-slave-02:
+    image: postgres:16.10-alpine3.22
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replica_user}"
+      POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
+      PGPASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
+      PGPORT: "${POSTGRES_PORT:-5432}"
+    command: >
+      /bin/sh -c "until pg_basebackup -w -h db-master -D /var/lib/postgresql/data/pgdata -U replica_user -P -R; do sleep 1; done &&
+      /usr/local/bin/docker-entrypoint.sh postgres" 
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
+      interval: 40s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+    # ports:
+    #   - "${POSTGRES_REPLICA_02_PORT:-5434}:${POSTGRES_PORT:-5432}"
+    depends_on:
+      db-master:
+        condition: service_healthy
+    volumes:
+      - pg_data_replica_02:/var/lib/postgresql/data/pgdata
+      - .configs/db/replicas/02-init.sh:/docker-entrypoint-initdb.d/init.sh
+    networks:
+      network-db:     
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.0
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /sys:/sys:ro
+      - /var/run:/var/run:rw
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      network-monitoring:
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      network-monitoring:
 
   postgres-exporter:
     labels:
@@ -173,24 +236,17 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable"
+      # DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-master:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable,postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-slave-01:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable,postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-slave-02:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable"
     # ports:
     #   - 9187:9187
     depends_on:
-      - db
+      # - db
+      - db-master
+      - db-slave-01
+      - db-slave-02
     networks:
       network-db:
-      network-monitoring:
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.47.2
-    privileged: true
-    volumes:
-      - /:/rootfs:ro
-      - /var/run/podman/podman.sock:/var/run/docker.sock:ro
-      - /sys:/sys:ro
-      - /var/lib/containers:/var/lib/docker:ro
-    networks:
       network-monitoring:
 
   prometheus:
@@ -267,6 +323,9 @@ services:
   
 volumes:
   pg_data:
+  pg_data_master:
+  pg_data_replica_01:
+  pg_data_replica_02:
   app_uploads:
   prometheus_data:
   grafana_data:
@@ -274,22 +333,22 @@ volumes:
 
 networks:
   network-db:
-    internal: true
+    # internal: true
     ipam:
       config:
         - subnet: 172.21.0.0/28
   network-api:
-    internal: true
+    # internal: true
     ipam:
       config:
         - subnet: 172.21.0.16/28
   network-web:
-    internal: true
+    # internal: true
     ipam:
       config:
         - subnet: 172.21.0.32/28
   network-monitoring:
-    internal: true
+    # internal: true
     ipam:
       config:
         - subnet: 172.21.0.48/28

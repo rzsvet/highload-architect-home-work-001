@@ -1,0 +1,76 @@
+services:
+  db-master:
+    image: postgres:16-alpine
+    container_name: db-master
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydatabase
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_REPLICATION_USER: replica_user
+      POSTGRES_REPLICATION_PASSWORD: replica_password
+    volumes:
+      - pg_data_master:/var/lib/postgresql/data/pgdata
+      - ./master/init.sh:/docker-entrypoint-initdb.d/init.sh
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mydatabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-replica-01:
+    image: postgres:16-alpine
+    container_name: db-replica-01
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_REPLICATION_USER: replica_user
+      POSTGRES_REPLICATION_PASSWORD: replica_password
+      PGPASSWORD: replica_password
+    volumes:
+      - pg_data_replica_01:/var/lib/postgresql/data/pgdata
+      - ./replicas/01-init.sh:/docker-entrypoint-initdb.d/init.sh
+    ports:
+      - "5433:5432"
+    depends_on:
+      db-master:
+        condition: service_healthy
+    command: >
+      /bin/sh -c "until pg_basebackup -w -h db-master -D /var/lib/postgresql/data/pgdata -U replica_user -P -R; do sleep 1; done &&
+      /usr/local/bin/docker-entrypoint.sh postgres"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mydatabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-replica-02:
+    image: postgres:16-alpine
+    container_name: db-replica-02
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_REPLICATION_USER: replica_user
+      POSTGRES_REPLICATION_PASSWORD: replica_password
+      PGPASSWORD: replica_password
+    volumes:
+      - pg_data_replica_02:/var/lib/postgresql/data/pgdata
+      - ./replicas/02-init.sh:/docker-entrypoint-initdb.d/init.sh
+    ports:
+      - "5434:5432"
+    depends_on:
+      db-master:
+        condition: service_healthy
+    command: >
+      /bin/sh -c "until pg_basebackup -w -h db-master -D /var/lib/postgresql/data/pgdata -U replica_user -P -R; do sleep 1; done &&
+      /usr/local/bin/docker-entrypoint.sh postgres"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mydatabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data_master:
+  pg_data_replica_01:
+  pg_data_replica_02:  
