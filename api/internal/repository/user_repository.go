@@ -4,6 +4,7 @@ import (
 	"api/internal/models"
 	"api/internal/monitoring"
 	"api/pkg/utils"
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -39,8 +40,13 @@ func (r *UserRepository) CreateUser(user *models.User) error {
 		return err
 	}
 
+	// Создаем контекст с таймаутом
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	now := time.Now()
-	err = r.writeDB.QueryRow(
+	err = r.writeDB.QueryRowContext(
+		ctx,
 		query,
 		user.Username,
 		user.Email,

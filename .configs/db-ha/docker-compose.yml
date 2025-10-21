@@ -1,0 +1,113 @@
+# docker compose file for running a 3-node PostgreSQL cluster
+# with 3-node etcd cluster as the DCS and one haproxy node
+#
+# requires a patroni image build from the Dockerfile:
+# $ docker build -t patroni .
+# The cluster could be started as:
+# $ docker-compose up -d
+# You can read more about it in the:
+# https://github.com/patroni/patroni/blob/master/docker/README.md
+
+services:
+  db-etcd-node-01: &etcd
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    hostname: etcd1
+    volumes:
+      - etcd_data_node_01:/home/postgres
+    networks:
+      network-db:
+    # ports:
+    #   - "2379:2379"
+    environment:
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: tutorial
+      ETCD_UNSUPPORTED_ARCH: arm64
+    command: etcd --name etcd1 --initial-advertise-peer-urls http://etcd1:2380
+
+  db-etcd-node-02:
+    <<: *etcd
+    hostname: etcd2
+    # ports:
+    #   - "2380:2379"
+    volumes:
+      - etcd_data_node_02:/home/postgres
+    command: etcd --name etcd2 --initial-advertise-peer-urls http://etcd2:2380
+
+  db-etcd-node-03:
+    <<: *etcd
+    hostname: etcd3
+    # ports:
+    #   - "2381:2379"
+    volumes:
+      - etcd_data_node_03:/home/postgres
+    command: etcd --name etcd3 --initial-advertise-peer-urls http://etcd3:2380
+
+  haproxy:
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    networks:
+      network-db:
+    hostname: haproxy
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    command: haproxy
+    environment: &node_env
+      ETCDCTL_ENDPOINTS: http://etcd1:2379,http://etcd2:2379,http://etcd3:2379
+      PATRONI_ETCD3_HOSTS: "'etcd1:2379','etcd2:2379','etcd3:2379'"
+      PATRONI_SCOPE: demo
+      PATRONI_RESTAPI_USERNAME: "admin"
+      PATRONI_RESTAPI_PASSWORD: "admin"
+      PATRONI_SUPERUSER_USERNAME: "postgres"
+      PATRONI_SUPERUSER_PASSWORD: "postgres"
+      PATRONI_REPLICATION_USERNAME: "replicator"
+      PATRONI_REPLICATION_PASSWORD: "replicate"
+      PATRONI_admin_PASSWORD: "admin"
+      PATRONI_admin_OPTIONS: "createdb,createrole"
+
+  db-pg-node-01:
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    volumes:
+      - pg_data_node_01:/home/postgres
+    networks:
+      network-db:
+    environment:
+      <<: *node_env
+      PATRONI_NAME: db-pg-node-01
+
+  db-pg-node-02:
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    volumes:
+      - pg_data_node_02:/home/postgres
+    networks:
+      network-db:
+    environment:
+      <<: *node_env
+      PATRONI_NAME: db-pg-node-02
+
+  db-pg-node-03:
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    volumes:
+      - pg_data_node_03:/home/postgres
+    networks:
+      network-db:
+    environment:
+      <<: *node_env
+      PATRONI_NAME: db-pg-node-03
+
+networks:
+  network-db:
+  # internal: true
+    ipam:
+      config:
+      - subnet: 172.21.0.0/28
+
+volumes:
+  pg_data_node_01:
+  pg_data_node_02:
+  pg_data_node_03:
+  etcd_data_node_01:
+  etcd_data_node_02:
+  etcd_data_node_03:

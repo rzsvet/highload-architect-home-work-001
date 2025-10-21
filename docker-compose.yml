@@ -50,15 +50,19 @@ services:
       SERVER_PATH: "${SERVER_PATH:-/}"
       JWT_SECRET: "${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}"
       # WRITE_DB_HOST: "${WRITE_DB_HOST:-db}"
-      WRITE_DB_HOST: "${WRITE_DB_HOST:-db-master}"
-      WRITE_DB_PORT: "${WRITE_DB_PORT:-5432}"
-      WRITE_DB_NAME: "${WRITE_DB_NAME:-root}"
+      # WRITE_DB_HOST: "${WRITE_DB_HOST:-db-master}"
+      # WRITE_DB_PORT: "${WRITE_DB_PORT:-5432}"
+      WRITE_DB_HOST: "${WRITE_DB_HOST:-haproxy}"
+      WRITE_DB_PORT: "${WRITE_DB_PORT:-5000}"
+      WRITE_DB_NAME: "${WRITE_DB_NAME:-postgres}"
       WRITE_DB_USER: "${WRITE_DB_USER:-root}"
       WRITE_DB_PASSWORD: "${WRITE_DB_PASSWORD:-password}"
       # READ_DB_HOST: "${READ_DB_HOST:-db}"
-      READ_DB_HOST: "${READ_DB_HOST:-db-slave-01}"
-      READ_DB_PORT: "${READ_DB_PORT:-5432}"
-      READ_DB_NAME: "${READ_DB_NAME:-root}"
+      # READ_DB_HOST: "${READ_DB_HOST:-db-slave-01}"
+      # READ_DB_PORT: "${READ_DB_PORT:-5432}"
+      READ_DB_HOST: "${READ_DB_HOST:-haproxy}"
+      READ_DB_PORT: "${READ_DB_PORT:-5001}"
+      READ_DB_NAME: "${READ_DB_NAME:-postgres}"
       READ_DB_USER: "${READ_DB_USER:-root}"
       READ_DB_PASSWORD: "${READ_DB_PASSWORD:-password}"
       SERVER_SWAGGER: "${SERVER_SWAGGER:-disabled}"
@@ -73,14 +77,16 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      db-master:
-        condition: service_healthy
-        restart: true
+      - haproxy
+      # db-master:
+      #   condition: service_healthy
+      #   restart: true
     networks:
       network-db:
       network-api:
       network-monitoring:
 
+# Database single node
   # db:
   #   # labels:
   #   #   - "traefik.enable=true"
@@ -110,95 +116,187 @@ services:
   #   networks:
   #     network-db:
 
-  db-master:
-    # labels:
-    #   - "traefik.enable=true"
-    #   # TCP Router
-    #   - "traefik.tcp.routers.db.rule=HostSNI(`*`)"
-    #   - "traefik.tcp.routers.db.service=db-service"
-    #   # TCP Service
-    #   - "traefik.tcp.services.db-service.loadbalancer.server.port=5432"
-    image: postgres:16.10-alpine3.22
+# Database one master and two slaves
+
+  # db-master:
+  #   # labels:
+  #   #   - "traefik.enable=true"
+  #   #   # TCP Router
+  #   #   - "traefik.tcp.routers.db.rule=HostSNI(`*`)"
+  #   #   - "traefik.tcp.routers.db.service=db-service"
+  #   #   # TCP Service
+  #   #   - "traefik.tcp.services.db-service.loadbalancer.server.port=5432"
+  #   image: postgres:16.10-alpine3.22
+  #   environment:
+  #     POSTGRES_USER: "${POSTGRES_USER:-root}"
+  #     POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-password}"
+  #     POSTGRES_DB: "${POSTGRES_DB:-root}"
+  #     PGPORT: "${POSTGRES_PORT:-5432}"
+  #     PGDATA: /var/lib/postgresql/data/pgdata
+  #     POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replica_user}"
+  #     POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
+  #     interval: 40s
+  #     timeout: 30s
+  #     retries: 3
+  #     start_period: 60s
+  #   ports:
+  #     - "${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}"
+  #   volumes:
+  #     - pg_data_master:/var/lib/postgresql/data/pgdata
+  #     - .configs/db/master/init.sh:/docker-entrypoint-initdb.d/init.sh
+  #   networks:
+  #     network-db:
+
+  # db-slave-01:
+  #   image: postgres:16.10-alpine3.22
+  #   environment:
+  #     PGDATA: /var/lib/postgresql/data/pgdata
+  #     POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replica_user}"
+  #     POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
+  #     PGPASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
+  #     PGPORT: "${POSTGRES_PORT:-5432}"
+  #   command: >
+  #     /bin/sh -c "until pg_basebackup -w -h db-master -D /var/lib/postgresql/data/pgdata -U replica_user -P -R; do sleep 1; done &&
+  #     /usr/local/bin/docker-entrypoint.sh postgres" 
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
+  #     interval: 40s
+  #     timeout: 30s
+  #     retries: 3
+  #     start_period: 60s
+  #   # ports:
+  #   #   - "${POSTGRES_REPLICA_01_PORT:-5433}:${POSTGRES_PORT:-5432}"
+  #   depends_on:
+  #     db-master:
+  #       condition: service_healthy
+  #   volumes:
+  #     - pg_data_replica_01:/var/lib/postgresql/data/pgdata
+  #     - .configs/db/replicas/01-init.sh:/docker-entrypoint-initdb.d/init.sh
+  #   networks:
+  #     network-db:
+
+  # db-slave-02:
+  #   image: postgres:16.10-alpine3.22
+  #   environment:
+  #     PGDATA: /var/lib/postgresql/data/pgdata
+  #     POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replica_user}"
+  #     POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
+  #     PGPASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
+  #     PGPORT: "${POSTGRES_PORT:-5432}"
+  #   command: >
+  #     /bin/sh -c "until pg_basebackup -w -h db-master -D /var/lib/postgresql/data/pgdata -U replica_user -P -R; do sleep 1; done &&
+  #     /usr/local/bin/docker-entrypoint.sh postgres" 
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
+  #     interval: 40s
+  #     timeout: 30s
+  #     retries: 3
+  #     start_period: 60s
+  #   # ports:
+  #   #   - "${POSTGRES_REPLICA_02_PORT:-5434}:${POSTGRES_PORT:-5432}"
+  #   depends_on:
+  #     db-master:
+  #       condition: service_healthy
+  #   volumes:
+  #     - pg_data_replica_02:/var/lib/postgresql/data/pgdata
+  #     - .configs/db/replicas/02-init.sh:/docker-entrypoint-initdb.d/init.sh
+  #   networks:
+  #     network-db:     
+
+# Database cluster
+
+  db-etcd-node-01: &etcd
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    hostname: etcd1
+    volumes:
+      - etcd_data_node_01:/home/postgres
+    networks:
+      network-db:
+    # ports:
+    #   - "2379:2379"
     environment:
-      POSTGRES_USER: "${POSTGRES_USER:-root}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-password}"
-      POSTGRES_DB: "${POSTGRES_DB:-root}"
-      PGPORT: "${POSTGRES_PORT:-5432}"
-      PGDATA: /var/lib/postgresql/data/pgdata
-      POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replica_user}"
-      POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
-      interval: 40s
-      timeout: 30s
-      retries: 3
-      start_period: 60s
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: tutorial
+      ETCD_UNSUPPORTED_ARCH: arm64
+    command: etcd --name etcd1 --initial-advertise-peer-urls http://etcd1:2380
+
+  db-etcd-node-02:
+    <<: *etcd
+    hostname: etcd2
+    # ports:
+    #   - "2380:2379"
+    volumes:
+      - etcd_data_node_02:/home/postgres
+    command: etcd --name etcd2 --initial-advertise-peer-urls http://etcd2:2380
+
+  db-etcd-node-03:
+    <<: *etcd
+    hostname: etcd3
+    # ports:
+    #   - "2381:2379"
+    volumes:
+      - etcd_data_node_03:/home/postgres
+    command: etcd --name etcd3 --initial-advertise-peer-urls http://etcd3:2380
+
+  haproxy:
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    networks:
+      network-db:
+    hostname: haproxy
     ports:
-      - "${POSTGRES_PORT:-5432}:${POSTGRES_PORT:-5432}"
+      - "5000:5000"
+      - "5001:5001"
+    command: haproxy
+    environment: &node_env
+      ETCDCTL_ENDPOINTS: http://etcd1:2379,http://etcd2:2379,http://etcd3:2379
+      PATRONI_ETCD3_HOSTS: "'etcd1:2379','etcd2:2379','etcd3:2379'"
+      PATRONI_SCOPE: demo
+      PATRONI_RESTAPI_USERNAME: "admin"
+      PATRONI_RESTAPI_PASSWORD: "admin"
+      PATRONI_SUPERUSER_USERNAME: "${POSTGRES_USER:-root}"
+      PATRONI_SUPERUSER_PASSWORD: "${POSTGRES_PASSWORD:-password}"
+      PATRONI_REPLICATION_USERNAME: "replicator"
+      PATRONI_REPLICATION_PASSWORD: "replicate"
+      PATRONI_admin_PASSWORD: "admin"
+      PATRONI_admin_OPTIONS: "createdb,createrole"
+
+  db-pg-node-01:
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
     volumes:
-      - pg_data_master:/var/lib/postgresql/data/pgdata
-      - .configs/db/master/init.sh:/docker-entrypoint-initdb.d/init.sh
+      - pg_data_node_01:/home/postgres
     networks:
       network-db:
-
-  db-slave-01:
-    image: postgres:16.10-alpine3.22
     environment:
-      PGDATA: /var/lib/postgresql/data/pgdata
-      POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replica_user}"
-      POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
-      PGPASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
-      PGPORT: "${POSTGRES_PORT:-5432}"
-    command: >
-      /bin/sh -c "until pg_basebackup -w -h db-master -D /var/lib/postgresql/data/pgdata -U replica_user -P -R; do sleep 1; done &&
-      /usr/local/bin/docker-entrypoint.sh postgres" 
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
-      interval: 40s
-      timeout: 30s
-      retries: 3
-      start_period: 60s
-    # ports:
-    #   - "${POSTGRES_REPLICA_01_PORT:-5433}:${POSTGRES_PORT:-5432}"
-    depends_on:
-      db-master:
-        condition: service_healthy
+      <<: *node_env
+      PATRONI_NAME: db-pg-node-01
+
+  db-pg-node-02:
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
     volumes:
-      - pg_data_replica_01:/var/lib/postgresql/data/pgdata
-      - .configs/db/replicas/01-init.sh:/docker-entrypoint-initdb.d/init.sh
+      - pg_data_node_02:/home/postgres
     networks:
       network-db:
-
-  db-slave-02:
-    image: postgres:16.10-alpine3.22
     environment:
-      PGDATA: /var/lib/postgresql/data/pgdata
-      POSTGRES_REPLICATION_USER: "${POSTGRES_REPLICATION_USER:-replica_user}"
-      POSTGRES_REPLICATION_PASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
-      PGPASSWORD: "${POSTGRES_REPLICATION_PASSWORD:-replica_password}"
-      PGPORT: "${POSTGRES_PORT:-5432}"
-    command: >
-      /bin/sh -c "until pg_basebackup -w -h db-master -D /var/lib/postgresql/data/pgdata -U replica_user -P -R; do sleep 1; done &&
-      /usr/local/bin/docker-entrypoint.sh postgres" 
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-d", "${POSTGRES_DB:-root}"]
-      interval: 40s
-      timeout: 30s
-      retries: 3
-      start_period: 60s
-    # ports:
-    #   - "${POSTGRES_REPLICA_02_PORT:-5434}:${POSTGRES_PORT:-5432}"
-    depends_on:
-      db-master:
-        condition: service_healthy
+      <<: *node_env
+      PATRONI_NAME: db-pg-node-02
+
+  db-pg-node-03:
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
     volumes:
-      - pg_data_replica_02:/var/lib/postgresql/data/pgdata
-      - .configs/db/replicas/02-init.sh:/docker-entrypoint-initdb.d/init.sh
+      - pg_data_node_03:/home/postgres
     networks:
-      network-db:     
+      network-db:
+    environment:
+      <<: *node_env
+      PATRONI_NAME: db-pg-node-03
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.52.0
@@ -237,17 +335,18 @@ services:
     restart: unless-stopped
     environment:
       # DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable"
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-master:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable,postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-slave-01:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable,postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-slave-02:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable"
+      # DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-master:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable,postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-slave-01:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable,postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-slave-02:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-root}?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-pg-node-01:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}?sslmode=disable,postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-pg-node-02:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}?sslmode=disable,postgresql://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-password}@db-pg-node-03:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}?sslmode=disable"
     # ports:
     #   - 9187:9187
     depends_on:
       # - db
-      - db-master
-      - db-slave-01
-      - db-slave-02
+      # - db-master
+      # - db-slave-01
+      # - db-slave-02
+      - haproxy
     networks:
       network-db:
-      network-monitoring:
 
   prometheus:
     labels:
@@ -278,6 +377,7 @@ services:
     #   - 9090:9090
     networks:
       network-monitoring:
+      network-db:
 
   grafana:
     labels:
@@ -326,6 +426,12 @@ volumes:
   pg_data_master:
   pg_data_replica_01:
   pg_data_replica_02:
+  pg_data_node_01:
+  pg_data_node_02:
+  pg_data_node_03:
+  etcd_data_node_01:
+  etcd_data_node_02:
+  etcd_data_node_03:
   app_uploads:
   prometheus_data:
   grafana_data:
