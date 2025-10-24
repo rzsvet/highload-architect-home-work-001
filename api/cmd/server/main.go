@@ -1,6 +1,7 @@
 package main
 
 import (
+	"api/internal/cache"
 	"api/internal/config"
 	"api/internal/database"
 	"api/internal/handler"
@@ -10,7 +11,6 @@ import (
 	"api/internal/service"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"runtime"
 	"time"
@@ -65,16 +65,42 @@ func main() {
 	}
 	defer db.Close()
 
+	// Initialize Redis cache
+	redisCache, err := cache.NewRedisCache(cfg)
+	if err != nil {
+		log.Printf("Warning: Failed to connect to Redis: %v", err)
+		log.Println("Continuing without cache...")
+		// Можно создать заглушку или продолжить без кэша
+		redisCache = nil
+	} else {
+		defer redisCache.Close()
+	}
+
 	// Initialize tables
 	if err := database.InitTables(db); err != nil {
 		log.Fatal("Failed to initialize tables:", err)
 	}
 
-	// Initialize repository, service, and handler
+	// Initialize services
+	cacheService := service.NewCacheService(redisCache)
+
+	// Initialize repositories
 	userRepo := repository.NewUserRepository(db.WriteDB, db.ReadDB)
+	friendRepo := repository.NewFriendRepository(db.WriteDB, db.ReadDB)
+	postRepo := repository.NewPostRepository(db.WriteDB, db.ReadDB)
+
+	// Initialize services
 	userService := service.NewUserService(userRepo, cfg.JWTSecret)
+	friendService := service.NewFriendService(friendRepo, userRepo)
+	// postService := service.NewPostService(postRepo)
+	postService := service.NewPostService(postRepo, cacheService)
+
+	// Initialize handlers
 	userHandler := handler.NewUserHandler(userService)
+	friendHandler := handler.NewFriendHandler(friendService)
+	postHandler := handler.NewPostHandler(postService)
 	searchHandler := handler.NewSearchHandler(userService)
+	cacheHandler := handler.NewCacheHandler(cacheService, postService)
 
 	// Create Gin router
 	router := gin.Default()
@@ -105,7 +131,7 @@ func main() {
 	// Public routes
 	public := router.Group(cfg.ServerPath)
 	{
-		public.POST("/user/register", userHandler.Register)
+		public.POST("/register", userHandler.Register)
 		public.POST("/login", userHandler.Login)
 	}
 
@@ -113,17 +139,39 @@ func main() {
 	protected := router.Group(cfg.ServerPath)
 	protected.Use(middleware.AuthMiddleware(userService))
 	{
+
+		// User routes
 		protected.GET("/users", userHandler.GetAllUsers)
-		protected.GET("/user/get/:id", userHandler.GetUser)
+		protected.GET("/users/:id", userHandler.GetUser)
 		protected.GET("/profile", userHandler.GetProfile)
 		// protected.PUT("/profile", userHandler.UpdateProfile)
+
+		// Friend routes
+		protected.POST("/friend/add", friendHandler.AddFriend)
+		protected.POST("/friend/delete", friendHandler.DeleteFriend)
+		protected.GET("/friends", friendHandler.GetFriends)
+		protected.GET("/friend/status", friendHandler.GetFriendshipStatus)
+
+		// Post routes
+		protected.POST("/post/create", postHandler.CreatePost)
+		protected.GET("/post/get/:id", postHandler.GetPost)
+		protected.PUT("/post/update/:id", postHandler.UpdatePost)
+		protected.DELETE("/post/delete/:id", postHandler.DeletePost)
+		protected.GET("/posts", postHandler.GetUserPosts)
+		protected.GET("/post/feed", postHandler.GetFeed)
+
+		// Search routes
 		protected.GET("/user/search", searchHandler.SearchUsers)
 		protected.GET("/user/search/simple", searchHandler.SearchUsersSimple)
+
+		// Сache routes
+		protected.POST("/cache/invalidate", cacheHandler.InvalidateCache)
+		protected.GET("/cache/stats", cacheHandler.GetCacheStats)
+
 	}
 
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
-		// Проверяем соединение с базами данных
 		writeDBErr := db.WriteDB.Ping()
 		readDBErr := db.ReadDB.Ping()
 
@@ -132,16 +180,41 @@ func main() {
 			status = "degraded"
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		// Проверяем Redis если он подключен
+		redisStatus := "not_configured"
+		var redisStats map[string]interface{}
+
+		if redisCache != nil {
+			if err := redisCache.HealthCheck(); err != nil {
+				redisStatus = "disconnected"
+			} else {
+				redisStatus = "connected"
+				redisStats = redisCache.GetStats()
+			}
+		}
+
+		response := gin.H{
 			"status":   status,
 			"write_db": map[string]interface{}{"connected": writeDBErr == nil},
 			"read_db":  map[string]interface{}{"connected": readDBErr == nil},
-			"version":  "1.0.0",
-		})
+			"redis":    redisStatus,
+		}
+
+		if redisStats != nil {
+			response["redis_stats"] = redisStats
+		}
+
+		c.JSON(200, response)
 	})
 
 	// Start server
+
 	log.Printf("Server starting on port %s", cfg.ServerPort)
+	if redisCache != nil {
+		log.Printf("Redis cache: ENABLED")
+	} else {
+		log.Printf("Redis cache: DISABLED")
+	}
 	log.Printf("Metrics available at: http://localhost:%s/metrics", cfg.ServerPort)
 	if cfg.ServerSwagger == "enabled" {
 		log.Printf("Swagger UI available at: http://localhost:%s/swagger/index.html", cfg.ServerPort)

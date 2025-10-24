@@ -1,3 +1,20 @@
+x-redis-common:
+  &redis-common
+  networks:
+    network-db:
+  command: |
+    sh -c "
+    cat > /tmp/redis.conf << 'EOF'
+    port 6379
+    cluster-enabled yes
+    cluster-config-file nodes.conf
+    cluster-node-timeout 5000
+    appendonly yes
+    bind 0.0.0.0
+    EOF
+    redis-server /tmp/redis.conf
+    "
+
 services:
   traefik:
     image: traefik:v3.5.1
@@ -67,6 +84,8 @@ services:
       READ_DB_PASSWORD: "${READ_DB_PASSWORD:-password}"
       SERVER_SWAGGER: "${SERVER_SWAGGER:-disabled}"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:8079}"
+      REDIS_CLUSTER_NODES: "${REDIS_CLUSTER_NODES:-redis-node-01:6379,redis-node-02:6379,redis-node-03:6379,redis-node-04:6379,redis-node-05:6379,redis-node-06:6379}"
+      REDIS_CLUSTER_MODE: "${REDIS_CLUSTER_NODES-true}"
     ports:
       - "${SERVER_PORT:-8079}:${SERVER_PORT:-8080}"
     restart: unless-stopped
@@ -87,6 +106,7 @@ services:
       network-monitoring:
 
 # Database single node
+
   # db:
   #   # labels:
   #   #   - "traefik.enable=true"
@@ -208,7 +228,7 @@ services:
   #   networks:
   #     network-db:     
 
-# Database cluster
+# Database Postgres cluster
 
   db-etcd-node-01: &etcd
     image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
@@ -297,6 +317,111 @@ services:
     environment:
       <<: *node_env
       PATRONI_NAME: db-pg-node-03
+
+# Database Redis Cluster
+
+  redis-node-01:
+    <<: *redis-common
+    image: redis:8.2.2-alpine3.22
+    hostname: redis-node-01
+    # ports:
+    #   - "6381:6379"
+
+  redis-node-02:
+    <<: *redis-common
+    image: redis:8.2.2-alpine3.22
+    hostname: redis-node-02
+    # ports:
+    #   - "6382:6379"
+
+  redis-node-03:
+    <<: *redis-common
+    image: redis:8.2.2-alpine3.22
+    hostname: redis-node-03
+    # ports:
+    #   - "6383:6379"
+  
+  redis-node-04:
+    <<: *redis-common
+    image: redis:8.2.2-alpine3.22
+    hostname: redis-node-04
+    # ports:
+    #   - "6384:6379"
+
+  redis-node-05:
+    <<: *redis-common
+    image: redis:8.2.2-alpine3.22
+    hostname: redis-node-05
+    # ports:
+    #   - "6385:6379"
+
+  redis-node-06:
+    <<: *redis-common
+    image: redis:8.2.2-alpine3.22
+    hostname: redis-node-06
+    # ports:
+    #   - "6386:6379"
+    
+  redis-cluster-creator:
+    image: redis:8.2.2-alpine3.22
+    # ports:
+    #   - 6999:6999
+    networks:
+      network-db:
+    command: redis-cli -p 6999 --cluster create redis-node-01:6379 redis-node-02:6379 redis-node-03:6379 redis-node-04:6379 redis-node-05:6379 redis-node-06:6379 --cluster-replicas 1 --cluster-yes
+    depends_on:
+      - redis-node-01
+      - redis-node-02
+      - redis-node-03
+      - redis-node-04
+      - redis-node-05
+      - redis-node-06
+  
+  redis-insight:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.insight.rule=PathPrefix(`/services/insight`)"
+      - "traefik.http.services.insight.loadbalancer.server.port=5540"
+      - "traefik.http.middlewares.insight-stripprefix.stripprefix.prefixes=/"
+      - "traefik.http.routers.insight.middlewares=insight-stripprefix"
+    image: redis/redisinsight:2.70.1
+    # ports:
+    #   - 5540:5540
+    networks:
+      network-db:
+    environment:
+      - RI_REDIS_HOST=redis-node-01
+      - RI_REDIS_PORT=6379
+      - RI_REDIS_ALIAS=redis-node-01:6379
+      - RI_PROXY_PATH=/services/insight/
+    depends_on:
+      - redis-node-01
+      - redis-node-02
+      - redis-node-03
+      - redis-node-04
+      - redis-node-05
+      - redis-node-06
+      - redis-cluster-creator
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.79.0
+    ports:
+      - 9121:9121
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis-node-01:6379"
+      REDIS_USER: null
+    links:
+      - redis-node-01
+      - redis-node-02
+      - redis-node-03
+      - redis-node-04
+      - redis-node-05
+      - redis-node-06
+      - redis-cluster-creator
+      - prometheus
+    networks:
+      network-db:
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.52.0
@@ -442,7 +567,7 @@ networks:
     # internal: true
     ipam:
       config:
-        - subnet: 172.21.0.0/28
+        - subnet: 172.21.0.64/27
   network-api:
     # internal: true
     ipam:
@@ -461,4 +586,4 @@ networks:
   network-public:
     ipam:
       config:
-        - subnet: 172.21.0.64/28
+        - subnet: 172.21.0.0/28

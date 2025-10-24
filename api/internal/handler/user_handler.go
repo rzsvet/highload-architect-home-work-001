@@ -3,6 +3,8 @@ package handler
 import (
 	"api/internal/models"
 	"api/internal/service"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -88,15 +90,32 @@ func (h *UserHandler) GetAllUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
-func (h *UserHandler) GetProfile(c *gin.Context) {
-
-	userID, exists := c.Get("user_id")
+func getUserIDFromContext(c *gin.Context) (int, error) {
+	userIDValue, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return 0, errors.New("user not authenticated")
+	}
+
+	switch v := userIDValue.(type) {
+	case int:
+		return v, nil
+	case float64:
+		return int(v), nil // Конвертируем float64 в int
+	case int64:
+		return int(v), nil
+	default:
+		return 0, fmt.Errorf("invalid user ID type: %T", v)
+	}
+}
+
+func (h *UserHandler) GetProfile(c *gin.Context) {
+	userID, err := getUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, err := h.userService.GetUserByID(userID.(int))
+	user, err := h.userService.GetUserByID(userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
@@ -106,9 +125,9 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 }
 
 // func (h *UserHandler) UpdateProfile(c *gin.Context) {
-// 	userID, exists := c.Get("user_id")
-// 	if !exists {
-// 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+// 	userID, err := getUserIDFromContext(c)
+// 	if err != nil {
+// 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 // 		return
 // 	}
 
@@ -118,7 +137,7 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 // 		return
 // 	}
 
-// 	if err := h.userService.UpdateUser(userID.(int), &updateReq); err != nil {
+// 	if err := h.userService.UpdateUser(userID, &updateReq); err != nil {
 // 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 // 		return
 // 	}

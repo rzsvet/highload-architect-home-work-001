@@ -101,6 +101,34 @@ func InitTables(db *Database) error {
     CREATE INDEX IF NOT EXISTS idx_users_last_name ON users USING gin (last_name gin_trgm_ops);
 	CREATE INDEX IF NOT EXISTS idx_users_first_last_gin ON users USING gin (first_name gin_trgm_ops, last_name gin_trgm_ops);
 	
+	 -- Таблица друзей
+    CREATE TABLE IF NOT EXISTS friends (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, friend_id)
+    );
+
+	-- Индексы для друзей
+    CREATE INDEX IF NOT EXISTS idx_friends_user_id ON friends(user_id);
+    CREATE INDEX IF NOT EXISTS idx_friends_friend_id ON friends(friend_id);
+    CREATE INDEX IF NOT EXISTS idx_friends_created_at ON friends(created_at);
+
+    -- Таблица постов
+    CREATE TABLE IF NOT EXISTS posts (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    -- Индексы для постов
+    CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at);
+    CREATE INDEX IF NOT EXISTS idx_posts_user_created ON posts(user_id, created_at);
     `
 
 	_, err := db.WriteDB.Exec(query)

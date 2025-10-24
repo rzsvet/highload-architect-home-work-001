@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: User API Service
-  description: API для регистрации, авторизации и управления пользователями
+  description: API для социальной сети с пользователями, друзьями и постами
   version: 1.0.0
   contact:
     name: API Support
@@ -9,16 +9,22 @@ info:
 
 servers:
   - url: /api
-    description: Development server
+    description: Production server
 
 tags:
   - name: Auth
     description: Операции аутентификации
   - name: Users
     description: Операции с пользователями
+  - name: Friends
+    description: Управление друзьями
+  - name: Posts
+    description: Управление постами
+  - name: Search
+    description: Поиск пользователей
 
 paths:
-  /user/register:
+  /register:
     post:
       tags:
         - Auth
@@ -29,7 +35,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RegisterRequest"
+              $ref: '#/components/schemas/RegisterRequest'
             example:
               username: "john_doe"
               email: "john@example.com"
@@ -41,24 +47,24 @@ paths:
               interests: "programming, reading, sports"
               city: "New York"
       responses:
-        "201":
+        '201':
           description: Пользователь успешно создан
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserResponse"
-        "400":
+                $ref: '#/components/schemas/UserResponse'
+        '400':
           description: Неверные данные или пользователь уже существует
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "500":
+                $ref: '#/components/schemas/Error'
+        '500':
           description: Внутренняя ошибка сервера
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: '#/components/schemas/Error'
 
   /login:
     post:
@@ -71,29 +77,29 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LoginRequest"
+              $ref: '#/components/schemas/LoginRequest'
             example:
               email: "john@example.com"
               password: "password123"
       responses:
-        "200":
+        '200':
           description: Успешная авторизация
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthResponse"
-        "401":
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
           description: Неверные учетные данные
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "400":
+                $ref: '#/components/schemas/Error'
+        '400':
           description: Неверный формат запроса
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: '#/components/schemas/Error'
 
   /users:
     get:
@@ -104,28 +110,28 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        "200":
+        '200':
           description: Список пользователей
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/UserResponse"
-        "401":
+                  $ref: '#/components/schemas/UserResponse'
+        '401':
           description: Не авторизован
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "500":
+                $ref: '#/components/schemas/Error'
+        '500':
           description: Внутренняя ошибка сервера
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: '#/components/schemas/Error'
 
-  /user/get/{id}:
+  /users/{id}:
     get:
       tags:
         - Users
@@ -143,30 +149,577 @@ paths:
             format: int64
             example: 1
       responses:
-        "200":
+        '200':
           description: Информация о пользователе
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserResponse"
-        "401":
+                $ref: '#/components/schemas/UserResponse'
+        '401':
           description: Не авторизован
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "404":
+                $ref: '#/components/schemas/Error'
+        '404':
           description: Пользователь не найден
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "400":
+                $ref: '#/components/schemas/Error'
+        '400':
           description: Неверный формат ID
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: '#/components/schemas/Error'
+
+  /profile:
+    get:
+      tags:
+        - Users
+      summary: Получение профиля текущего пользователя
+      description: Возвращает информацию о текущем аутентифицированном пользователе
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+        - Users
+      summary: Обновление профиля текущего пользователя
+      description: Обновляет информацию о текущем аутентифицированном пользователе
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+            example:
+              first_name: "John"
+              last_name: "Smith"
+              interests: "programming, music, travel"
+              city: "Boston"
+      responses:
+        '200':
+          description: Профиль успешно обновлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Profile updated successfully"
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Неверные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /friend/add:
+    post:
+      tags:
+        - Friends
+      summary: Добавить друга
+      description: Добавляет пользователя в друзья
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FriendRequest'
+            example:
+              friend_id: 2
+      responses:
+        '200':
+          description: Друг успешно добавлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Friend added successfully"
+        '400':
+          description: Неверные данные или пользователи уже друзья
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /friend/delete:
+    post:
+      tags:
+        - Friends
+      summary: Удалить друга
+      description: Удаляет пользователя из друзей
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FriendRequest'
+            example:
+              friend_id: 2
+      responses:
+        '200':
+          description: Друг успешно удален
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Friend deleted successfully"
+        '400':
+          description: Неверные данные или пользователи не являются друзьями
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Дружба не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /friends:
+    get:
+      tags:
+        - Friends
+      summary: Получить список друзей
+      description: Возвращает список друзей пользователя
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Список друзей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FriendResponse'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /friend/status:
+    get:
+      tags:
+        - Friends
+      summary: Получить статус дружбы
+      description: Возвращает статус дружбы с указанным пользователем
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: friend_id
+          in: query
+          required: true
+          description: ID пользователя
+          schema:
+            type: integer
+            format: int64
+            example: 2
+      responses:
+        '200':
+          description: Статус дружбы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendshipStatus'
+        '400':
+          description: Неверный ID пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /post/create:
+    post:
+      tags:
+        - Posts
+      summary: Создать пост
+      description: Создает новый пост пользователя
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePostRequest'
+            example:
+              title: "Мой первый пост"
+              content: "Это содержимое моего первого поста в социальной сети"
+      responses:
+        '201':
+          description: Пост успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          description: Неверные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /post/get/{id}:
+    get:
+      tags:
+        - Posts
+      summary: Получить пост
+      description: Возвращает пост по ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID поста
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      responses:
+        '200':
+          description: Информация о посте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostResponse'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пост не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /post/update/{id}:
+    put:
+      tags:
+        - Posts
+      summary: Обновить пост
+      description: Обновляет существующий пост
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID поста
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePostRequest'
+            example:
+              title: "Обновленный заголовок"
+              content: "Обновленное содержимое поста"
+      responses:
+        '200':
+          description: Пост успешно обновлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Post updated successfully"
+        '400':
+          description: Неверные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пост не найден или доступ запрещен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /post/delete/{id}:
+    delete:
+      tags:
+        - Posts
+      summary: Удалить пост
+      description: Удаляет пост пользователя
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID поста
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      responses:
+        '200':
+          description: Пост успешно удален
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Post deleted successfully"
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пост не найден или доступ запрещен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /posts:
+    get:
+      tags:
+        - Posts
+      summary: Получить посты пользователя
+      description: Возвращает посты указанного пользователя
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          description: ID пользователя (по умолчанию - текущий)
+          schema:
+            type: integer
+            format: int64
+            example: 1
+        - name: page
+          in: query
+          required: false
+          description: Номер страницы
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Размер страницы
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Список постов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedResponse'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /post/feed:
+    get:
+      tags:
+        - Posts
+      summary: Лента постов друзей
+      description: Возвращает ленту постов друзей пользователя
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Номер страницы
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Размер страницы
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Лента постов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedResponse'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /user/search:
     get:
@@ -211,106 +764,83 @@ paths:
             maximum: 100
             default: 20
       responses:
-        "200":
+        '200':
           description: Успешный поиск пользователей
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserSearchResponse"
-        "400":
+                $ref: '#/components/schemas/UserSearchResponse'
+        '400':
           description: Невалидные данные
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "401":
+                $ref: '#/components/schemas/Error'
+        '401':
           description: Не авторизован
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "500":
+                $ref: '#/components/schemas/Error'
+        '500':
           description: Внутренняя ошибка сервера
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: '#/components/schemas/Error'
 
-  /profile:
+  /user/search/simple:
     get:
       tags:
-        - Users
-      summary: Получение профиля текущего пользователя
-      description: Возвращает информацию о текущем аутентифицированном пользователе
+        - Search
+      summary: Простой поиск пользователей
+      description: Поиск пользователей по имени и фамилии (без пагинации)
       security:
         - BearerAuth: []
+      parameters:
+        - name: first_name
+          in: query
+          required: true
+          description: Часть имени для поиска
+          schema:
+            type: string
+            example: "Конст"
+            minLength: 2
+        - name: last_name
+          in: query
+          required: true
+          description: Часть фамилии для поиска
+          schema:
+            type: string
+            example: "Оси"
+            minLength: 2
       responses:
-        "200":
-          description: Профиль пользователя
+        '200':
+          description: Успешный поиск пользователей
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserResponse"
-        "401":
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Невалидные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
           description: Не авторизован
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "404":
-          description: Пользователь не найден
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Внутренняя ошибка сервера
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-
-  #   put:
-  #     tags:
-  #       - Users
-  #     summary: Обновление профиля текущего пользователя
-  #     description: Обновляет информацию о текущем аутентифицированном пользователе
-  #     security:
-  #       - BearerAuth: []
-  #     requestBody:
-  #       required: true
-  #       content:
-  #         application/json:
-  #           schema:
-  #             $ref: '#/components/schemas/UpdateUserRequest'
-  #           example:
-  #             first_name: "John"
-  #             last_name: "Smith"
-  #             interests: "programming, music, travel"
-  #             city: "Boston"
-  #     responses:
-  #       '200':
-  #         description: Профиль успешно обновлен
-  #         content:
-  #           application/json:
-  #             schema:
-  #               type: object
-  #               properties:
-  #                 message:
-  #                   type: string
-  #                   example: "Profile updated successfully"
-  #       '401':
-  #         description: Не авторизован
-  #         content:
-  #           application/json:
-  #             schema:
-  #               $ref: '#/components/schemas/Error'
-  #       '400':
-  #         description: Неверные данные
-  #         content:
-  #           application/json:
-  #             schema:
-  #               $ref: '#/components/schemas/Error'
-  #       '404':
-  #         description: Пользователь не найден
-  #         content:
-  #           application/json:
-  #             schema:
-  #               $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/Error'
 
 components:
   schemas:
@@ -453,7 +983,7 @@ components:
           description: JWT токен для аутентификации
           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
         user:
-          $ref: "#/components/schemas/UserResponse"
+          $ref: '#/components/schemas/UserResponse'
 
     UpdateUserRequest:
       type: object
@@ -497,6 +1027,172 @@ components:
           example: "Boston"
           nullable: true
 
+    FriendRequest:
+      type: object
+      required:
+        - friend_id
+      properties:
+        friend_id:
+          type: integer
+          format: int64
+          description: ID пользователя для добавления/удаления в друзья
+          example: 2
+
+    FriendResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID записи о дружбе
+          example: 1
+        user_id:
+          type: integer
+          format: int64
+          description: ID пользователя
+          example: 1
+        friend_id:
+          type: integer
+          format: int64
+          description: ID друга
+          example: 2
+        friend:
+          $ref: '#/components/schemas/UserResponse'
+        created_at:
+          type: string
+          format: date-time
+          description: Дата и время добавления в друзья
+          example: "2023-12-19T10:30:00Z"
+
+    FriendshipStatus:
+      type: object
+      properties:
+        is_friend:
+          type: boolean
+          description: Являются ли пользователи друзьями
+          example: true
+        is_pending:
+          type: boolean
+          description: Ожидает ли запрос на дружбу подтверждения
+          example: false
+
+    CreatePostRequest:
+      type: object
+      required:
+        - title
+        - content
+      properties:
+        title:
+          type: string
+          description: Заголовок поста
+          maxLength: 255
+          example: "Мой первый пост"
+        content:
+          type: string
+          description: Содержимое поста
+          example: "Это содержимое моего первого поста в социальной сети"
+
+    Post:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID поста
+          example: 1
+        user_id:
+          type: integer
+          format: int64
+          description: ID пользователя
+          example: 1
+        title:
+          type: string
+          description: Заголовок поста
+          example: "Мой первый пост"
+        content:
+          type: string
+          description: Содержимое поста
+          example: "Это содержимое моего первого поста в социальной сети"
+        created_at:
+          type: string
+          format: date-time
+          description: Дата и время создания поста
+          example: "2023-12-19T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Дата и время обновления поста
+          example: "2023-12-19T10:30:00Z"
+
+    PostResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ID поста
+          example: 1
+        user_id:
+          type: integer
+          format: int64
+          description: ID пользователя
+          example: 1
+        user:
+          $ref: '#/components/schemas/UserResponse'
+        title:
+          type: string
+          description: Заголовок поста
+          example: "Мой первый пост"
+        content:
+          type: string
+          description: Содержимое поста
+          example: "Это содержимое моего первого поста в социальной сети"
+        created_at:
+          type: string
+          format: date-time
+          description: Дата и время создания поста
+          example: "2023-12-19T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Дата и время обновления поста
+          example: "2023-12-19T10:30:00Z"
+
+    UpdatePostRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Заголовок поста
+          maxLength: 255
+          example: "Обновленный заголовок"
+          nullable: true
+        content:
+          type: string
+          description: Содержимое поста
+          example: "Обновленное содержимое поста"
+          nullable: true
+
+    FeedResponse:
+      type: object
+      properties:
+        posts:
+          type: array
+          items:
+            $ref: '#/components/schemas/PostResponse'
+        total:
+          type: integer
+          description: Общее количество постов
+          example: 150
+        page:
+          type: integer
+          description: Текущая страница
+          example: 1
+        pages:
+          type: integer
+          description: Общее количество страниц
+          example: 8
+
     UserSearchResponse:
       type: object
       properties:
@@ -508,6 +1204,14 @@ components:
           type: integer
           description: Общее количество найденных пользователей
           example: 150
+        page:
+          type: integer
+          description: Текущая страница
+          example: 1
+        pages:
+          type: integer
+          description: Общее количество страниц
+          example: 8
 
     Error:
       type: object
@@ -530,7 +1234,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
           example:
             error: "Authorization header required"
 
@@ -539,7 +1243,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
           example:
             error: "User not found"
 
@@ -548,6 +1252,6 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            $ref: '#/components/schemas/Error'
           example:
             error: "Invalid email format"
