@@ -231,7 +231,7 @@ services:
 # Database Postgres cluster
 
   db-etcd-node-01: &etcd
-    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:v4.1.0}
     hostname: etcd1
     volumes:
       - etcd_data_node_01:/home/postgres
@@ -267,7 +267,7 @@ services:
     command: etcd --name etcd3 --initial-advertise-peer-urls http://etcd3:2380
 
   haproxy:
-    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:v4.1.0}
     networks:
       network-db:
     hostname: haproxy
@@ -289,7 +289,7 @@ services:
       PATRONI_admin_OPTIONS: "createdb,createrole"
 
   db-pg-node-01:
-    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:v4.1.0}
     volumes:
       - pg_data_node_01:/home/postgres
     networks:
@@ -299,7 +299,7 @@ services:
       PATRONI_NAME: db-pg-node-01
 
   db-pg-node-02:
-    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:v4.1.0}
     volumes:
       - pg_data_node_02:/home/postgres
     networks:
@@ -309,7 +309,7 @@ services:
       PATRONI_NAME: db-pg-node-02
 
   db-pg-node-03:
-    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:4.1.0}
+    image: ${PATRONI_TEST_IMAGE:-webadm/patroni:v4.1.0}
     volumes:
       - pg_data_node_03:/home/postgres
     networks:
