@@ -4,6 +4,7 @@ import (
 	"api/internal/cache"
 	"api/internal/config"
 	"api/internal/database"
+	"api/internal/dialog"
 	"api/internal/handler"
 	"api/internal/middleware"
 	"api/internal/monitoring"
@@ -102,6 +103,11 @@ func main() {
 	searchHandler := handler.NewSearchHandler(userService)
 	cacheHandler := handler.NewCacheHandler(cacheService, postService)
 
+	// Dialog Service
+	dialogClient := dialog.NewDialogClient(cfg.DialogServiceURL)
+	dialogService := dialog.NewService(dialogClient)
+	dialogHandler := handler.NewDialogHandler(dialogService)
+
 	// Create Gin router
 	router := gin.Default()
 
@@ -167,6 +173,9 @@ func main() {
 		// Сache routes
 		protected.POST("/cache/invalidate", cacheHandler.InvalidateCache)
 		protected.GET("/cache/stats", cacheHandler.GetCacheStats)
+
+		protected.POST("/dialogs/send", dialogHandler.SendMessage)
+		protected.GET("/dialogs/:user_id", dialogHandler.GetDialog)
 
 	}
 
