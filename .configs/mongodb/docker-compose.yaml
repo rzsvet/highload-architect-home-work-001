@@ -1,0 +1,92 @@
+services:
+
+  # dialog-service:
+  #   build:
+  #     context: ../../dialog-service/
+  #     dockerfile: ../.configs/dialog-service.Dockerfile
+  #   environment:
+  #     GIN_MODE: "release"
+  #     SERVER_PORT: "${SERVER_PORT:-8080}"
+  #     MONGODB_URI: "mongodb://db-mongo-node-01:27017"
+  #     DB_NAME: dialog_service
+  #     JWT_SECRET: your-secret-key-here
+  #   ports:
+  #     - "${SERVER_PORT:-8079}:${SERVER_PORT:-8080}"
+  #   restart: unless-stopped
+  #   # healthcheck:
+  #   #   test: ["CMD", "/health", "healthcheck"]
+  #   #   interval: 30s
+  #   #   timeout: 10s
+  #   #   retries: 3
+  #   #   start_period: 10s
+  #   depends_on:
+  #     - mongo-express
+
+  # MongoDB Replica Set
+  db-mongo-node-01:
+    image: mongo:8.2-noble
+    container_name: db-mongo-node-01
+    command: mongod --replSet rs0 --bind_ip_all
+    ports:
+      - "27017:27017"
+    volumes:
+      - db-mongo-data-01:/data/db
+
+  db-mongo-node-02:
+    image: mongo:8.2-noble
+    container_name: db-mongo-node-02
+    command: mongod --replSet rs0 --bind_ip_all
+    ports:
+      - "27018:27017"
+    volumes:
+      - db-mongo-data-02:/data/db
+
+  db-mongo-node-03:
+    image: mongo:8.2-noble
+    container_name: db-mongo-node-03
+    command: mongod --replSet rs0 --bind_ip_all
+    ports:
+      - "27019:27017"
+    volumes:
+      - db-mongo-data-03:/data/db
+
+  db-mongo-init-replica:
+    image: mongo:8.2-noble
+    container_name: mongo-init-replica
+    command: >
+      bash -c "
+        sleep 10 &&
+        mongosh --host db-mongo-node-01 --eval '
+          rs.initiate({
+            _id: \"rs0\",
+            members: [
+              { _id: 0, host: \"db-mongo-node-01:27017\" },
+              { _id: 1, host: \"db-mongo-node-02:27017\" },
+              { _id: 2, host: \"db-mongo-node-03:27017\" }
+            ]
+          })
+        '
+      "
+    depends_on:
+      - db-mongo-node-01
+      - db-mongo-node-02
+      - db-mongo-node-03
+
+  # Mongo Express (без аутентификации)
+  mongo-express:
+    image: mongo-express:1.0-20-alpine3.19
+    container_name: mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_SERVER: db-mongo-node-01
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      - db-mongo-node-01
+      - db-mongo-node-02
+      - db-mongo-node-03
+
+volumes:
+  db-mongo-data-01:
+  db-mongo-data-02:
+  db-mongo-data-03:

@@ -46,6 +46,9 @@ type Config struct {
 
 	// CORS configuration
 	CORSAllowedOrigins []string
+
+	// Dialog Service
+	DialogServiceURL string `mapstructure:"DIALOG_SERVICE_URL"`
 }
 
 func LoadConfig() *Config {
@@ -88,6 +91,8 @@ func LoadConfig() *Config {
 		},
 
 		CORSAllowedOrigins: strings.Split(corsOrigins, ","),
+
+		DialogServiceURL: getEnv("DIALOG_SERVICE_URL", "http://localhost:8080"),
 	}
 }
 
